@@ -1,7 +1,7 @@
 #ifndef DL_SDLGPU_MATRICES_H
 #define DL_SDLGPU_MATRICES_H
 
-#include "SDL3/SDL.h"
+#include "Vector3.h"
 // Matrix Math
 typedef struct Matrix4x4
 {
@@ -11,66 +11,18 @@ typedef struct Matrix4x4
 	float m41, m42, m43, m44;
 } Matrix4x4;
 
-typedef struct Vector3
+constexpr Matrix4x4 IDENTITYMATRIX{
+	1,0,0,0,
+	0,1,0,0,
+	0,0,1,0,
+	0,0,0,1
+};
+
+struct MVPMatrix
 {
-	float x, y, z;
-
-	Vector3& operator+=(const Vector3& rhs)
-	{
-		x += rhs.x;
-		y += rhs.y;
-		z += rhs.z;
-		return *this;
-	}
-
-	Vector3 operator+(const Vector3& rhs)
-	{
-		Vector3 tmp{*this};
-		return tmp += rhs;
-	}
-} Vector3;
-
-inline Vector3 operator*(const Vector3& vec, float scal)
-{
-	Vector3 tmp{vec};
-	tmp.x *= scal;
-	tmp.y *= scal;
-	tmp.z *= scal;
-	return tmp;
-}
-
-inline Vector3 operator*(float scal, const Vector3& vec)
-{
-	Vector3 tmp{vec};
-	tmp.x *= scal;
-	tmp.y *= scal;
-	tmp.z *= scal;
-	return tmp;
-}
-
-inline Vector3 Vector3_Normalize(Vector3 vec)
-{
-	float magnitude = SDL_sqrtf((vec.x * vec.x) + (vec.y * vec.y) + (vec.z * vec.z));
-	return (Vector3) {
-		vec.x / magnitude,
-		vec.y / magnitude,
-		vec.z / magnitude
-	};
-}
-
-inline float Vector3_Dot(Vector3 vecA, Vector3 vecB)
-{
-	return (vecA.x * vecB.x) + (vecA.y * vecB.y) + (vecA.z * vecB.z);
-}
-
-inline Vector3 Vector3_Cross(Vector3 vecA, Vector3 vecB)
-{
-	return (Vector3) {
-		vecA.y * vecB.z - vecB.y * vecA.z,
-		-(vecA.x * vecB.z - vecB.x * vecA.z),
-		vecA.x * vecB.y - vecB.x * vecA.y
-	};
-}
+	Matrix4x4 m{IDENTITYMATRIX};
+	Matrix4x4 vp{IDENTITYMATRIX};
+};
 
 inline Matrix4x4 Matrix4x4_Multiply(const Matrix4x4& matrix1, const Matrix4x4& matrix2)
 {
@@ -176,6 +128,79 @@ inline Matrix4x4 Matrix4x4_Multiply(const Matrix4x4& matrix1, const Matrix4x4& m
 	return result;
 }
 
+inline Matrix4x4 Matrix4x4_Invert(Matrix4x4 m)
+{
+	// Cache 2x2 determinants from the bottom two rows, reused across
+	// multiple cofactors below (same technique the original XNA/MonoGame
+	// Matrix.Invert implementation uses, to avoid recomputing shared terms).
+	float b00 = m.m31 * m.m42 - m.m32 * m.m41;
+	float b01 = m.m31 * m.m43 - m.m33 * m.m41;
+	float b02 = m.m31 * m.m44 - m.m34 * m.m41;
+	float b03 = m.m32 * m.m43 - m.m33 * m.m42;
+	float b04 = m.m32 * m.m44 - m.m34 * m.m42;
+	float b05 = m.m33 * m.m44 - m.m34 * m.m43;
+
+	float d11 =  (m.m22 * b05 - m.m23 * b04 + m.m24 * b03);
+	float d12 = -(m.m21 * b05 - m.m23 * b02 + m.m24 * b01);
+	float d13 =  (m.m21 * b04 - m.m22 * b02 + m.m24 * b00);
+	float d14 = -(m.m21 * b03 - m.m22 * b01 + m.m23 * b00);
+
+	float det = m.m11 * d11 + m.m12 * d12 + m.m13 * d13 + m.m14 * d14;
+
+	// A near-zero determinant means the matrix is singular (non-invertible) --
+	// e.g. a degenerate/scaled-to-zero transform. Guard against divide-by-zero
+	// rather than returning garbage silently.
+	if (SDL_fabsf(det) < 1e-8f)
+	{
+		return (Matrix4x4) {
+			1,0,0,0,
+			0,1,0,0,
+			0,0,1,0,
+			0,0,0,1
+		};
+	}
+
+	float invDet = 1.0f / det;
+
+	float b06 = m.m21 * m.m42 - m.m22 * m.m41;
+	float b07 = m.m21 * m.m43 - m.m23 * m.m41;
+	float b08 = m.m21 * m.m44 - m.m24 * m.m41;
+	float b09 = m.m22 * m.m43 - m.m23 * m.m42;
+	float b10 = m.m22 * m.m44 - m.m24 * m.m42;
+	float b11 = m.m23 * m.m44 - m.m24 * m.m43;
+
+	float b12 = m.m21 * m.m32 - m.m22 * m.m31;
+	float b13 = m.m21 * m.m33 - m.m23 * m.m31;
+	float b14 = m.m21 * m.m34 - m.m24 * m.m31;
+	float b15 = m.m22 * m.m33 - m.m23 * m.m32;
+	float b16 = m.m22 * m.m34 - m.m24 * m.m32;
+	float b17 = m.m23 * m.m34 - m.m24 * m.m33;
+
+	Matrix4x4 result;
+
+	result.m11 = d11 * invDet;
+	result.m21 = d12 * invDet;
+	result.m31 = d13 * invDet;
+	result.m41 = d14 * invDet;
+
+	result.m12 = -(m.m12 * b05 - m.m13 * b04 + m.m14 * b03) * invDet;
+	result.m22 =  (m.m11 * b05 - m.m13 * b02 + m.m14 * b01) * invDet;
+	result.m32 = -(m.m11 * b04 - m.m12 * b02 + m.m14 * b00) * invDet;
+	result.m42 =  (m.m11 * b03 - m.m12 * b01 + m.m13 * b00) * invDet;
+
+	result.m13 =  (m.m14 * b09 - m.m13 * b10 + m.m12 * b11) * invDet;
+	result.m23 = -(m.m14 * b07 - m.m13 * b08 + m.m11 * b11) * invDet;
+	result.m33 =  (m.m14 * b06 - m.m12 * b08 + m.m11 * b10) * invDet;
+	result.m43 = -(m.m13 * b06 - m.m12 * b07 + m.m11 * b09) * invDet;
+
+	result.m14 = -(m.m12 * b17 - m.m13 * b16 + m.m14 * b15) * invDet;
+	result.m24 =  (m.m11 * b17 - m.m13 * b14 + m.m14 * b13) * invDet;
+	result.m34 = -(m.m11 * b16 - m.m12 * b14 + m.m14 * b12) * invDet;
+	result.m44 =  (m.m11 * b15 - m.m12 * b13 + m.m13 * b12) * invDet;
+
+	return result;
+}
+
 inline Matrix4x4 Matrix4x4_CreateRotationZ(float radians)
 {
 	return (Matrix4x4) {
@@ -193,6 +218,16 @@ inline Matrix4x4 Matrix4x4_CreateTranslation(float x, float y, float z)
 		0, 1, 0, 0,
 		0, 0, 1, 0,
 		x, y, z, 1
+	};
+}
+
+inline Matrix4x4 Matrix4x4_CreateScale(float scale)
+{
+	return (Matrix4x4){
+		scale, 0, 0, 0,
+		0, scale, 0, 0,
+		0, 0, scale, 0,
+		0, 0,0, 1
 	};
 }
 
@@ -247,6 +282,28 @@ inline Matrix4x4 Matrix4x4_CreateViewMatrix(
 		vectorB.z, vectorC.z, vectorA.z, 0,
 		-Vector3_Dot(vectorB, cameraPosition), -Vector3_Dot(vectorC, cameraPosition), -Vector3_Dot(vectorA, cameraPosition), 1
 	};
+}
+
+inline Vector3 Vector3_Transform(Vector3 vec, Matrix4x4 m)
+{
+	// Treat vec as a position with an implicit w = 1 (row-vector convention,
+	// matching this file: v * M). Compute the full 4-component result,
+	// including w, rather than assuming w stays 1.
+	float x = (vec.x * m.m11) + (vec.y * m.m21) + (vec.z * m.m31) + m.m41;
+	float y = (vec.x * m.m12) + (vec.y * m.m22) + (vec.z * m.m32) + m.m42;
+	float z = (vec.x * m.m13) + (vec.y * m.m23) + (vec.z * m.m33) + m.m43;
+	float w = (vec.x * m.m14) + (vec.y * m.m24) + (vec.z * m.m34) + m.m44;
+
+	// Perspective divide -- required whenever M might not be a pure
+	// affine transform (e.g. inverting a view-projection matrix, as in
+	// your raycasting case). For a pure model/view matrix, w is always
+	// exactly 1 here and this divide is a harmless no-op.
+	if (SDL_fabsf(w) > 1e-8f)
+	{
+		return (Vector3) { x / w, y / w, z / w };
+	}
+	
+	return (Vector3) { x, y, z };
 }
 
 #endif

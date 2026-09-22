@@ -11,7 +11,7 @@ struct Camera3d{
 	double aspectRatio{};
 
 	double near {0.1};
-	double far {10.0};
+	double far {100.0};
 
 	Matrix4x4 viewMat {};
 	Matrix4x4 projectionMat{};

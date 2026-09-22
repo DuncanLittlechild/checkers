@@ -1,8 +1,12 @@
 #ifndef DL_SDL3_IMGUI_UTILS_H
 #define DL_SDL3_IMGUI_UTILS_H
 #include "SDL3/SDL_gpu.h"
+#include "SDL3/SDL_mouse.h"
+#include "SDL3/SDL_stdinc.h"
+#include "imgui.h"
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_sdlgpu3.h"
+#include "structs/AppData.h"
 
 static ImDrawData* drawData {nullptr};
 
@@ -32,7 +36,7 @@ inline void InitImgui(SDL_GPUDevice* device, SDL_Window* window) {
 
     // Enable keyboard navigation in imgui
     ImGuiIO& io {ImGui::GetIO()};
-    io.FontGlobalScale = 2;
+    //io.FontGlobalScale = 2;
     //io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
     // Initialise ImGui globals for SDL
@@ -46,12 +50,32 @@ inline void InitImgui(SDL_GPUDevice* device, SDL_Window* window) {
     ImGui_ImplSDLGPU3_Init(&init_info);
 }
 
-inline void PrepareImgui(SDL_GPUCommandBuffer* commandBuffer) {
+inline void PrepareImgui(AppData* appData, SDL_GPUCommandBuffer* commandBuffer) {
     ImGui_ImplSDLGPU3_NewFrame();
     ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
     ImGuiIO& io {ImGui::GetIO()};
-    ImGui::Begin("Tab");
+    ImGui::Begin("Camera");
+    ImGui::Text("Camera Position:  x:%f,  y:%f,  z:%f", appData->camera.pos.x,appData->camera.pos.y,appData->camera.pos.z);
+    ImGui::Text("Camera target:  x:%f,  y:%f,  z:%f", appData->camera.target.x,appData->camera.target.y,appData->camera.target.z);
+    ImGui::Text("DeltaTime: %f", appData->deltaTime);
+    ImGui::Text("Selected square: x: %d, y: %d", appData->board.GetSelectedPiece().bPos.row, appData->board.GetSelectedPiece().bPos.col);
+    if(ImGui::ColorEdit3("WhiteCol", appData->assets.pieceMat.albedo))
+    {
+        SDL_memcpy(appData->assets.tileMat.albedo, appData->assets.pieceMat.albedo, sizeof(float) * 3);
+    }
+    ImGui::ColorEdit3("BlackCol", &appData->board.blackCol.x);
+
+    if(ImGui::SliderFloat3("LightPos", &appData->lightSource.pos.x, -20.f, 20.f))
+    {
+        appData->lightSource.UpdateViewMat();
+        appData->lightSource.UpdateVpMat();
+    }
+    ImGui::SliderFloat("Piece Shinyness", &appData->pieceShinyness, .0f, 128.f);
+    ImGui::SliderFloat("Board Shinyness", &appData->boardShinyness, .0f, 128.f);
+
+    ImGui::ColorEdit3("Board Specular Colour",&appData->boardSpecularColour.x);
+    ImGui::ColorEdit3("Piece Specular Colour", &appData->pieceSpecularColour.x);
     ImGui::End();
 
     ImGui::Render();

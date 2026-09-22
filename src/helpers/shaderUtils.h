@@ -1,30 +1,45 @@
 #ifndef DL_GPUTEST_SHADERUTILS_H
 #define DL_GPUTEST_SHADERUTILS_H
 #include "SDL3/SDL.h"
+#include "structs/Vector3.h"
 #include <string>
 #include <filesystem>
 
 struct DL_ShaderInfo{
+    std::string shaderFilename{};
     Uint32 numSamplers{};
     Uint32 numStorageTextures{};
     Uint32 numStorageBuffers{};
     Uint32 numUniformBuffers{};
 };
 
-inline SDL_GPUShader* LoadShader(SDL_GPUDevice* device, const std::string& shaderFilename, const DL_ShaderInfo& dlShaderInfo = {})
+struct DL_LightingFragPerLoop{
+    Vector3 cameraPos{};
+    float gpuPadding{};
+    Vector3 lightPos{};
+};
+
+struct DL_LightingFragPerObject{
+    Vector3 trueColour{};
+    float gpuPadding{};
+    Vector3 specularColour{};
+    float shinyness{};
+};
+
+inline SDL_GPUShader* LoadShader(SDL_GPUDevice* device, DL_ShaderInfo* info)
 {
     SDL_GPUShaderStage stage;
-    if(shaderFilename.contains(".vert"))
+    if(info->shaderFilename.contains(".vert"))
     {
         stage = SDL_GPU_SHADERSTAGE_VERTEX;
     }
-    else if (shaderFilename.contains(".frag"))
+    else if (info->shaderFilename.contains(".frag"))
     {
         stage = SDL_GPU_SHADERSTAGE_FRAGMENT;
     }
     else
     {
-        SDL_Log("Couldn't deduce shader stage from file name: %s", shaderFilename.c_str());
+        SDL_Log("Couldn't deduce shader stage from file name: %s", info->shaderFilename.c_str());
         return nullptr;
     }
     std::filesystem::path fullPath;
@@ -41,19 +56,19 @@ inline SDL_GPUShader* LoadShader(SDL_GPUDevice* device, const std::string& shade
 
     if(backendFormats & SDL_GPU_SHADERFORMAT_SPIRV)
     {
-        fullPath /= shaderFilename + ".spv";
+        fullPath /= info->shaderFilename + ".spv";
         format = SDL_GPU_SHADERFORMAT_SPIRV;
         entryPoint = "main";
     }
     else if(backendFormats & SDL_GPU_SHADERFORMAT_MSL)
     {
-        fullPath /= shaderFilename + ".msl";
+        fullPath /= info->shaderFilename + ".msl";
         format = SDL_GPU_SHADERFORMAT_MSL;
         entryPoint = "main0";
     }
     else if(backendFormats & SDL_GPU_SHADERFORMAT_DXIL)
     {
-        fullPath /= shaderFilename + ".dxil";
+        fullPath /= info->shaderFilename + ".dxil";
         format = SDL_GPU_SHADERFORMAT_DXIL;
         entryPoint = "main";
     }
@@ -75,10 +90,10 @@ inline SDL_GPUShader* LoadShader(SDL_GPUDevice* device, const std::string& shade
         .entrypoint = entryPoint,
         .format = format,
         .stage = stage,
-        .num_samplers = dlShaderInfo.numSamplers,
-        .num_storage_textures = dlShaderInfo.numStorageTextures,
-        .num_storage_buffers = dlShaderInfo.numStorageBuffers,
-        .num_uniform_buffers = dlShaderInfo.numUniformBuffers
+        .num_samplers = info->numSamplers,
+        .num_storage_textures = info->numStorageTextures,
+        .num_storage_buffers = info->numStorageBuffers,
+        .num_uniform_buffers = info->numUniformBuffers
     }};
 
     SDL_GPUShader* shader {SDL_CreateGPUShader(device, &shaderInfo)};
