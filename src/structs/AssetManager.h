@@ -139,6 +139,8 @@ struct AssetManager{
     Material pieceMatB{};
     Material pieceMatSelected{};
 
+    Uint32 shadowRes{1024};
+
     bool Load(SDL_GPUDevice* device, SDL_Window* window, int w, int h)
     {
         tile.Create(device, CreateTileMesh());
@@ -182,6 +184,7 @@ struct AssetManager{
 		};
 		DL_ShaderInfo fragmentShaderInfo{
 			.shaderFilename = "Lighting.frag",
+            .numSamplers = 1,
 			.numUniformBuffers = 2,
 		};
 		CreatePipeline(
@@ -212,8 +215,22 @@ struct AssetManager{
 	{
 		CreateDepthTexture(device, &depth, w, h);
 		// Create shadow depth texture
-		CreateDepthTexture(device, &shadows, w, h);
+        CreateShadowTexture(device);
 	}
+
+    void CreateShadowTexture(SDL_GPUDevice* device)
+    {
+        SDL_GPUTextureCreateInfo createInfo {
+            .type = SDL_GPU_TEXTURETYPE_2D,
+            .format = SDL_GPU_TEXTUREFORMAT_D32_FLOAT,
+            .usage = SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET|SDL_GPU_TEXTUREUSAGE_SAMPLER,
+            .width = shadowRes,
+            .height = shadowRes,
+            .layer_count_or_depth = 1,
+            .num_levels = 1
+        };
+        shadows = SDL_CreateGPUTexture(device, &createInfo);
+    }
 
     bool LoadMatData()
     {

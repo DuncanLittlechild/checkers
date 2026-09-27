@@ -100,6 +100,16 @@ inline void PrepareImgui(AppData* appData, SDL_GPUCommandBuffer* commandBuffer) 
                 appData->lightSource.UpdateViewMat();
                 appData->lightSource.UpdateVpMat();
             }
+            if(ImGui::SliderFloat("LightRadius", &appData->lightRadius, 0.01f, SDL_PI_F))
+            {
+                appData->lightSource.fov = appData->lightRadius;
+                appData->lightSource.UpdateProjMat();
+                appData->lightSource.UpdateVpMat();
+            }
+            ImGui::EndTabItem();
+        }
+        if(ImGui::BeginTabItem("Materials"))
+        {
             DL_Imgui_EditMaterial(appData->assets.pieceMatW, "White Piece");
             DL_Imgui_EditMaterial(appData->assets.pieceMatB, "Black Piece");
             DL_Imgui_EditMaterial(appData->assets.pieceMatSelected, "Selected Piece");

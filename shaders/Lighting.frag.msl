@@ -25,14 +25,26 @@ struct main0_in
 {
     float3 in_var_TEXCOORD0 [[user(locn0)]];
     float4 in_var_TEXCOORD1 [[user(locn1)]];
+    float4 in_var_TEXCOORD2 [[user(locn2)]];
 };
 
-fragment main0_out main0(main0_in in [[stage_in]], constant type_OncePerLoop& OncePerLoop [[buffer(0)]], constant type_OncePerObject& OncePerObject [[buffer(1)]])
+fragment main0_out main0(main0_in in [[stage_in]], constant type_OncePerLoop& OncePerLoop [[buffer(0)]], constant type_OncePerObject& OncePerObject [[buffer(1)]], texture2d<float> Texture [[texture(0)]], sampler Sampler [[sampler(0)]])
 {
     main0_out out = {};
-    float3 _38 = fast::normalize(in.in_var_TEXCOORD0);
-    float3 _43 = fast::normalize(OncePerLoop.lightPos - in.in_var_TEXCOORD1.xyz);
-    out.out_var_SV_Target0 = float4(((OncePerObject.trueColour * precise::max(dot(_43, _38), 0.0)) + (OncePerObject.trueColour * 0.100000001490116119384765625)) + (float3(OncePerObject.specularColour) * powr(precise::max(dot(_38, fast::normalize(_43 + fast::normalize(OncePerLoop.cameraPos - in.in_var_TEXCOORD1.xyz))), 0.0), OncePerObject.shinyness)), 1.0);
+    float3 _49 = fast::normalize(in.in_var_TEXCOORD0);
+    float3 _54 = fast::normalize(OncePerLoop.lightPos - in.in_var_TEXCOORD2.xyz);
+    float3 _76 = ((OncePerObject.trueColour * precise::max(dot(_54, _49), 0.0)) + (OncePerObject.trueColour * 0.100000001490116119384765625)) + (float3(OncePerObject.specularColour) * powr(precise::max(dot(_49, fast::normalize(_54 + fast::normalize(OncePerLoop.cameraPos - in.in_var_TEXCOORD2.xyz))), 0.0), OncePerObject.shinyness));
+    float3 _81 = in.in_var_TEXCOORD1.xyz / float3(in.in_var_TEXCOORD1.w);
+    float3 _97;
+    if ((Texture.sample(Sampler, ((_81.xy * 0.5) + float2(0.5)).xy).x + 0.001000000047497451305389404296875) < _81.z)
+    {
+        _97 = _76 * 0.100000001490116119384765625;
+    }
+    else
+    {
+        _97 = _76;
+    }
+    out.out_var_SV_Target0 = float4(_97, 1.0);
     return out;
 }
 

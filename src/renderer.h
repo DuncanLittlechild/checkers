@@ -145,6 +145,28 @@ namespace DL_Renderer{
         }
     }
 
+    // Perform the renderpass needed to create the shadow depth texture
+    inline void ShadowRenderPass(SDL_GPUCommandBuffer* commandBuffer, AppData* appData, SDL_GPUColorTargetInfo* targetInfo)
+    {
+        SDL_GPUDepthStencilTargetInfo depthInfo{
+            .texture = appData->assets.shadows,
+            .clear_depth = 1.0f,
+            .load_op = SDL_GPU_LOADOP_CLEAR,
+            .store_op = SDL_GPU_STOREOP_DONT_CARE
+        };
+
+        SDL_GPURenderPass* renderPass {SDL_BeginGPURenderPass(commandBuffer, targetInfo, 1, &depthInfo)};
+
+        SDL_BindGPUGraphicsPipeline(renderPass, appData->assets.shadowPipeline);
+
+        SDL_PushGPUVertexUniformData(commandBuffer, 1, &appData->lightSource.vpMat, sizeof(Matrix4x4));
+
+        RenderTiles(appData->board.board.data, &appData->assets, renderPass, commandBuffer);
+        RenderPieces(appData->board.pieces, &appData->assets, renderPass, commandBuffer);
+
+        SDL_EndGPURenderPass(renderPass);
+    }
+
 
     inline bool RenderGame(AppData* appData)
     {
@@ -171,6 +193,8 @@ namespace DL_Renderer{
             .store_op = SDL_GPU_STOREOP_STORE,
         };
 
+        ShadowRenderPass(commandBuffer, appData, &targetInfo);
+
         SDL_GPUDepthStencilTargetInfo depthInfo{
             .texture = appData->assets.depth,
             .clear_depth = 1.0f,
@@ -185,7 +209,20 @@ namespace DL_Renderer{
         /* BIND PIPELINES AND DRAW */
         SDL_BindGPUGraphicsPipeline(renderPass, appData->assets.pipeline);
 
-        SDL_PushGPUVertexUniformData(commandBuffer, 1, &appData->camera.vpMat, sizeof(Matrix4x4));
+        std::array samplers{
+            SDL_GPUTextureSamplerBinding{
+                .texture = appData->assets.shadows,
+                .sampler = appData->assets.shadowSampler,
+            }
+        };
+
+        SDL_BindGPUFragmentSamplers(renderPass, 0, samplers.data(), samplers.size());
+
+        DL_LightingVertexPerLoop vertexPerLoopUB{
+            .cameraVPMat = appData->camera.vpMat,
+            .lightVPMat = appData->lightSource.vpMat
+        };
+        SDL_PushGPUVertexUniformData(commandBuffer, 1, &vertexPerLoopUB, sizeof(DL_LightingVertexPerLoop));
 
         DL_LightingFragPerLoop fragPerLoopUB{
             .cameraPos = appData->camera.pos,

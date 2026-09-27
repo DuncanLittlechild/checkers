@@ -27,13 +27,24 @@ struct Camera3d{
 		UpdateVpMat();
 	}
 
-	void UpdateCam(float xMov, float zMov, float xCamMov, float yCamMov)
+	// move camera relative to its axes while keeping it focused on a specific point
+	void PivotCam(float xPosMov, float yPosMov, float zPosMov)
 	{
 		Vector3 xAx {viewMat.m11, viewMat.m21, viewMat.m31};
 		Vector3 yAx {viewMat.m12, viewMat.m22, viewMat.m32};
 		Vector3 zAx {viewMat.m13, viewMat.m23, viewMat.m33};
-		Vector3 posChangeVec {xMov * xAx + zMov * zAx};
-		Vector3 camChangeVec {posChangeVec + xCamMov * xAx + yCamMov * yAx};
+		Vector3 posChangeVec {xPosMov * xAx + yPosMov * yAx + zPosMov * zAx};
+		pos += posChangeVec;
+	}
+
+	// Move camera relative to its axes while keeping looking in the same direction
+	void UpdateCam(float xPosMov, float zPosMov, float xTargetMov, float yTargetMov)
+	{
+		Vector3 xAx {viewMat.m11, viewMat.m21, viewMat.m31};
+		Vector3 yAx {viewMat.m12, viewMat.m22, viewMat.m32};
+		Vector3 zAx {viewMat.m13, viewMat.m23, viewMat.m33};
+		Vector3 posChangeVec {xPosMov * xAx + zPosMov * zAx};
+		Vector3 camChangeVec {posChangeVec + xTargetMov * xAx + yTargetMov * yAx};
 		pos += posChangeVec;
 		target += camChangeVec;
 	}

@@ -31,7 +31,9 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
         return SDL_APP_FAILURE;
 
     appData->camera.Init(appData->width, appData->height);
-    appData->lightSource.Init(appData->width, appData->height);
+    appData->lightSource.Init(appData->lightRadius, appData->lightRadius);
+    appData->lightSource.fov = appData->lightRadius;
+    appData->lightSource.target = Vector3{4.0f, 0.0f, 4.0f};
 
     appData->assets.Load(appData->device, appData->window, appData->width, appData->height);
 

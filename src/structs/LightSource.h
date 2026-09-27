@@ -15,34 +15,32 @@ struct PointLight {
     Matrix4x4 viewMat {};
 	Matrix4x4 projectionMat{};
 	Matrix4x4 vpMat {};
-/*
-    	void Init(double w, double h)
+
+	void Init(double r, Vector3 newPos, Vector3 newTarget)
 	{
-		UpdateAspectRatio(w,h);
-		UpdateProjMat();
-		UpdateViewMat();
+		lightRadius = r;
+		pos = newPos;
+		target = newTarget;
+
 		UpdateVpMat();
 	}
 
 	void UpdateViewMat()
 	{
-		viewMat = Matrix4x4_CreateViewMatrix(pos, target, worldUp);
+		static Vector3 worldup {0.0f, 1.0f, 0.0f};
+		viewMat = Matrix4x4_CreateViewMatrix(pos, target, worldup);
 	}
 
 	void UpdateProjMat()
 	{
-		projectionMat = Matrix4x4_CreateProjectionMatrix(lightRadius, aspectRatio, near, far);
-	}
-	void UpdateAspectRatio(double w, double h)
-	{
-		aspectRatio = (double)w/h;
-		UpdateProjMat();
+		projectionMat = Matrix4x4_CreateProjectionMatrix(lightRadius, 1.0, near, far);
 	}
 	void UpdateVpMat()
 	{
+		UpdateViewMat();
+		UpdateProjMat();
 		vpMat = Matrix4x4_Multiply(viewMat, projectionMat);
 	}
-        */
 };
 
 #endif

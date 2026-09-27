@@ -4,13 +4,9 @@ cbuffer MvpTrans : register(b0, space1)
 };
 cbuffer VpTrans : register(b1, space1)
 {
-    row_major float4x4 VpTransform : packoffset(c0);
+    row_major float4x4 VpTransform;
+    row_major float4x4 LvpTrans;
 };
-/*
-cbuffer LVpTrans : register(b3, space1)
-{
-    row_major float4x4 lvpTrans : packoffset(c0);
-};*/
 
 struct Input
 {
@@ -22,7 +18,8 @@ struct Input
 struct Output
 {
     float3 norms : TEXCOORD0;
-    float4 worldPos : TEXCOORD1;
+    float4 lSpacePos : TEXCOORD1;
+    float4 worldPos : TEXCOORD2;
     float4 Position : SV_Position;
 };
 
@@ -33,6 +30,9 @@ Output main (Input input)
     output.worldPos = mul(float4(input.position, 1.0f), MoveTransform);
     // Transform it into clipspace
     output.Position = mul(output.worldPos, VpTransform);
+
+    // Get the vertices position in the lights clipspace
+    output.lSpacePos = mul(output.worldPos, LvpTrans);
 
     // Calculate diffuse lighting
     output.norms = input.norms;

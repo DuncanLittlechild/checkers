@@ -1,6 +1,7 @@
 #ifndef DL_GPUTEST_SHADERUTILS_H
 #define DL_GPUTEST_SHADERUTILS_H
 #include "SDL3/SDL.h"
+#include "structs/Matrix4x4.h"
 #include "structs/Vector3.h"
 #include <string>
 #include <filesystem>
@@ -11,6 +12,11 @@ struct DL_ShaderInfo{
     Uint32 numStorageTextures{};
     Uint32 numStorageBuffers{};
     Uint32 numUniformBuffers{};
+};
+
+struct DL_LightingVertexPerLoop{
+    Matrix4x4 cameraVPMat{};
+    Matrix4x4 lightVPMat{};
 };
 
 struct DL_LightingFragPerLoop{

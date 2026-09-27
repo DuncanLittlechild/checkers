@@ -5,6 +5,7 @@
 #include "Camera3d.h"
 #include "AssetManager.h"
 #include "Board.h"
+#include "SDL3/SDL_stdinc.h"
 
 struct PlayerInput{
 	enum : unsigned char{
@@ -38,6 +39,7 @@ struct AppData {
 
 	Camera3d camera{};
 	Camera3d lightSource{};
+	float lightRadius {SDL_PI_F/8};
 
 	Uint64 lastTime {0};
 	double deltaTime {0.0f};
