@@ -3,7 +3,7 @@
 #include "SDL3/SDL.h"
 #include "helpers/dl_primitives.h"
 #include "structs/AssetManager.h"
-#include "structs/Camera3d.h"
+#include "structs/RenderData.h"
 #include <array>
 #include <cstdlib>
 static constexpr int EMPTYSQUARE{0};
@@ -11,7 +11,59 @@ static constexpr int EMPTYSQUARE{0};
 struct BPos{
     int row{0};
     int col{0};
+
+    BPos operator+(BPos r)
+    {
+        r += *this;
+        return r;
+    }
+
+    BPos operator-()
+    {
+        BPos tmp{*this};
+        tmp.col = -tmp.col;
+        tmp.row = -tmp.row;
+        return tmp;
+    }
+
+    BPos operator-(BPos r)
+    {
+        return *this + -r;
+    }
+
+    BPos& operator+=(const BPos& r)
+    {
+        row += r.row;
+        col += r.col;
+        return *this;
+    }
+
+    BPos& operator*=(int r)
+    {
+        row *= r;
+        col *= r;
+        return *this;
+    }
+
+    BPos& operator/=(int r)
+    {
+        row /= r;
+        col /= r;
+        return *this;
+    }
 };
+
+inline BPos operator*(BPos l, int r)
+{
+    l *= r;
+    return l;
+}
+
+inline BPos operator/(BPos l, int r)
+{
+    l /= r;
+    return l;
+}
 
 constexpr std::array<BPos, 25> checkersStartingPositions {{
     // Null piece
@@ -28,20 +80,17 @@ constexpr std::array<BPos, 25> checkersStartingPositions {{
 }};
 
 struct Thing{
-    enum ThingType{
+    enum ThingType : Uint8{
         TILE,
         PIECE,
         THINGTYPE_COUNT
     };
     // Rendering data
-    GPUMesh* mesh{nullptr};
-    Material* material{nullptr};
-    Vector3 offset{0.0f, 0.0f, 0.0f};
-    float scale{};
+    RenderData renderData{};
 
-    ThingType thingType{};
-    BPos bPos{};
-    Uint8 flags{};
+    ThingType thingType{TILE};
+    BPos bPos{0,0};
+    Uint8 flags{0};
 
 protected:
     Thing(ThingType g_thingType)
@@ -51,7 +100,12 @@ protected:
 
 struct Tile : public Thing {
     // Array index of the piece occupying the tile.
-    int pieceIndex{};
+    enum Flags : Uint8 {
+        POSSIBLEMOVE = 0b0000'0001,
+        POSSIBLETAKE = 0b0000'0010
+    };
+    int pieceIndex{0};
+    Uint8 flags{0};
 
     Tile()
         : Thing{ThingType::TILE}
@@ -74,6 +128,7 @@ struct Piece : public Thing {
 
     enum Flags : Uint8 {
         TAKEN = 0b0000'0001,
+        SELECTED = 0b0000'0010
     };
 
     enum Type {
@@ -81,9 +136,9 @@ struct Piece : public Thing {
         KING,
     };
 
-    int index{};
-    Type type{};
-    Colour colour{};
+    int index{0};
+    Type type{PAWN};
+    Colour colour{NULL_COL};
 
     Piece()
         : Thing {ThingType::PIECE}
@@ -98,6 +153,9 @@ struct Piece : public Thing {
             case(KING):{
                 return std::abs(newRow - bPos.row) == 1 && std::abs(newCol - bPos.col) == 1;
             } break;
+            default:{
+                assert(false && "Unexpected additional piece type checked for movement");
+            };
         }
     }
 
@@ -106,9 +164,34 @@ struct Piece : public Thing {
         return index == 0;
     }
 
+    void MoveTo(BPos& newPos)
+    {
+        BPos diff {newPos - bPos};
+        bPos = newPos;
+        renderData.offset.x += diff.row;
+        renderData.offset.z += diff.col;
+    }
+
     void Take()
     {
         flags |= TAKEN;
+    }
+
+    void Select(AssetManager* assets)
+    {
+        flags |= SELECTED;
+        renderData.material = &assets->pieceMatSelected;
+    }
+
+    bool IsSelected()
+    {
+        return flags & SELECTED;
+    }
+
+    void DeSelect(AssetManager* assets)
+    {
+        flags &= ~SELECTED;
+        renderData.material = colour == WHITE ? &assets->pieceMatW : &assets->pieceMatB;
     }
 
     bool IsTaken()
@@ -121,111 +204,33 @@ struct Piece : public Thing {
         if((colour == BLACK && bPos.col == 7) || (colour == WHITE && bPos.col == 0))
         {
             type = KING;
-            mesh = &assets.king;
+            renderData.mesh = &assets.king;
             return true;
         }
         return false;
     }
 };
 
-struct Board{
-    static constexpr int PIECESPERPLAYER {12};
-    std::array<std::array<Tile, 8>, 8> board{};
-    std::array<Piece, 25> pieces{};
+template <typename T, std::size_t W, std::size_t H> 
+struct Array1D{
+    std::array<T, H*W> data{};
 
-    int selectedIndex{0};
-    Piece::Colour turn {Piece::WHITE};
-
-    void Init(AssetManager& assets)
+    T& operator[](int col, int row)
     {
-
-        // Generate tiles
-        Tile tile{};
-        tile.mesh = &assets.tile;
-        tile.scale = 1.0f;
-        bool whiteTile{false};
-        for (int col{0}; col < board.size(); ++col)
-        {
-            for (int row{0}; row < board[col].size(); ++row)
-            {
-                tile.material = whiteTile ? &assets.tileMatW : &assets.tileMatB;
-                tile.bPos.col = col;
-                tile.bPos.row = row;
-
-                tile.offset.x = row + 0.5f;
-                tile.offset.z = col + 0.5f;
-
-                board[col][row] = tile;
-                whiteTile = !whiteTile;
-            }
-            whiteTile = !whiteTile;
-        }
-
-        // generate pieces
-        Piece piece{};
-        piece.offset.y = CHECKERSHEIGHT/2;
-        piece.mesh = &assets.tile;
-        piece.scale = 0.8f;
-        // Push null Piece
-        pieces[0] = piece;
-        for (int i {1}; i < checkersStartingPositions.size(); ++i)
-        {
-            auto& pos {checkersStartingPositions[i]};
-            piece.index = i;
-            piece.bPos = pos;
-            piece.offset.x = pos.row;
-            piece.offset.z = pos.col;
-            if (i < 13)
-            {
-                piece.colour = Piece::BLACK;
-                piece.material = &assets.pieceMatB;
-            }
-            else
-            {
-                piece.colour = Piece::WHITE;
-                piece.material = &assets.pieceMatW;
-            }
-            pieces[i] = piece;
-            board[pos.col][pos.row].pieceIndex = i;
-        }
+        return data[col * W + row];
     }
 
-    void MoveSelectedPiece(int newRow, int newCol)
+    constexpr std::size_t ColSize() noexcept
     {
-        Piece& selectedPiece {pieces[selectedIndex]};
-        board[selectedPiece.bPos.col][selectedPiece.bPos.row].pieceIndex = 0;
-        selectedPiece.bPos.row = newRow;
-        selectedPiece.bPos.col = newCol;
-        board[selectedPiece.bPos.col][selectedPiece.bPos.row].pieceIndex = selectedPiece.index;
+        return H;
     }
 
-    Tile& operator[](int y, int x)
+    constexpr std::size_t RowSize() noexcept
     {
-        return board[y][x];
-    }  
-
-    Piece& GetPiece(int x, int y)
-    {
-        return pieces[board[y][x].pieceIndex];
-    }
-
-    Piece& GetSelectedPiece()
-    {
-        return pieces[selectedIndex];
-    }
-
-    void EndTurn()
-    {
-        turn = turn == Piece::WHITE ? Piece::BLACK : Piece::WHITE;
-        selectedIndex = 0;
-    }
-
-    void TakePiece(Piece& toTake)
-    {
-        toTake.flags |= Piece::TAKEN;
-        board[toTake.bPos.col][toTake.bPos.row].pieceIndex = 0;
+        return W;
     }
 };
+
 
 inline bool SquareIsOnBoard(int x, int y)
 {
@@ -233,60 +238,209 @@ inline bool SquareIsOnBoard(int x, int y)
 
 }
 
-inline bool PieceCanTake(Piece& p, Board& board)
-{
-    static constexpr std::pair<int, int> PAWNSQUARES[2]{{1, -1}, {1, 1}};
-    static constexpr std::pair<int, int> KINGSQUARES[4]{{1, -1}, {1, 1}, {-1, -1}, {-1, 1}};
+struct Board{
+    static constexpr int PIECESPERPLAYER {12};
+    Array1D<Tile, 8, 8> board{};
+    std::array<Piece, 25> pieces{};
 
-    //Check that places 2 squares away can be moved to
-    std::vector<std::pair<int, int>> freeSquares{};
-    if(p.type == Piece::PAWN)
+    int selectedIndex{0};
+    float squareClickedOnX{.0f};
+    float squareClickedOnZ{.0f};
+    Piece::Colour turn {Piece::WHITE};
+
+    void Init(AssetManager& assets)
     {
-        freeSquares.reserve(2);
-
-        int mDir {p.colour == Piece::WHITE ? -2 : 2};
-        int newRowArr[2] {p.bPos.row + 2, p.bPos.row - 2};
-        int newCol {p.bPos.col + mDir};
-        for (auto& x : newRowArr)
+        // Generate tiles
+        Tile tile{};
+        tile.renderData.mesh = &assets.tile;
+        tile.renderData.scale = 1.0f;
+        bool whiteTile{false};
+        for (int col{0}; col < board.ColSize(); ++col)
         {
-            if (SquareIsOnBoard(x, newCol))
+            for (int row{0}; row < board.RowSize(); ++row)
             {
-                Piece& target{board.GetPiece(x, newCol)};
-                if(target.IsNull() || target.IsTaken())
-                    freeSquares.emplace_back(std::pair<int, int>{newCol, x});
+                tile.renderData.material = whiteTile ? &assets.tileMatW : &assets.tileMatB;
+                tile.bPos.col = col;
+                tile.bPos.row = row;
+
+                tile.renderData.offset.x = row + 0.5;
+                tile.renderData.offset.z = col + 0.5;
+
+                board[col, row] = tile;
+                whiteTile = !whiteTile;
             }
+            whiteTile = !whiteTile;
+        }
+
+        // generate pieces
+        Piece piece{};
+        piece.renderData.offset.y = CHECKERSHEIGHT/2;
+        piece.renderData.mesh = &assets.tile;
+        piece.renderData.scale = 0.8f;
+        // Push null Piece
+        pieces[0] = piece;
+        for (int i {1}; i < checkersStartingPositions.size(); ++i)
+        {
+            auto& pos {checkersStartingPositions[i]};
+            piece.index = i;
+            piece.bPos = pos;
+            piece.renderData.offset.x = pos.row + 0.5;
+            piece.renderData.offset.z = pos.col + 0.5;
+            if (i < 13)
+            {
+                piece.colour = Piece::BLACK;
+                piece.renderData.material = &assets.pieceMatB;
+            }
+            else
+            {
+                piece.colour = Piece::WHITE;
+                piece.renderData.material = &assets.pieceMatW;
+            }
+            pieces[i] = piece;
+            board[pos.col,pos.row].pieceIndex = i;
         }
     }
-    else if (p.type == Piece::KING)
+
+    void IdentifyPossibleDestinations(Piece& newPiece)
     {
-        freeSquares.reserve(4);
-        int newRowArr[2] {p.bPos.row + 2, p.bPos.row - 2};
-        int newColArr[2] {p.bPos.col + 2, p.bPos.col - 2};
-        for (auto& y : newColArr)
+        // Can move to all empty tiles within one square (only forwards if a pawn) of all empty tiles within two
+        // squares if there is an enemy piece inbetween
+
+        static constexpr BPos BLACKPAWNSQUARES[2]{{1, -1}, {1, 1}};
+        static constexpr BPos WHITEPAWNSQUARES[2]{{-1, -1}, {-1, 1}};
+        static constexpr BPos KINGSQUARES[4]{{1, -1}, {1, 1}, {-1, -1}, {-1, 1}};
+
+        // Setup the arry of position offsets based on piece type and colour
+        std::vector<BPos> squares{};
+        squares.reserve(4);
+        if (newPiece.type == Piece::KING)
         {
-            for (auto& x: newRowArr)
+            for (auto& sq : KINGSQUARES)
+                squares.push_back(sq);
+        }
+        else if (newPiece.colour == Piece::BLACK)
+        {
+            for (auto& sq : BLACKPAWNSQUARES)
+                squares.push_back(sq);
+        }
+        else
+        {
+            for (auto& sq : WHITEPAWNSQUARES)
+                squares.push_back(sq);
+        }
+
+        // Check neighbouring spaces. If they are empty, set as possible destination. If not, check the next square on
+        // to see if it is empty
+        for (auto& mv : squares)
+        {
+            BPos newPos {newPiece.bPos + mv};
+            if(!SquareIsOnBoard(newPos.row, newPos.col))
+                continue;
+            Tile& dest {board[newPos.col, newPos.row]};
+            if (dest.pieceIndex == EMPTYSQUARE)
             {
-                if(SquareIsOnBoard(x, y))
+                dest.flags |= Tile::POSSIBLEMOVE;
+            }
+            // If the next square on is occupied
+            else if (pieces[dest.pieceIndex].colour != turn)
+            {
+                BPos newPos2 {newPiece.bPos + mv * 2};
+                if (Tile& dest {board[newPos2.col, newPos2.row]}; dest.pieceIndex == EMPTYSQUARE)
                 {
-                    Piece& target{board.GetPiece(x, y)};
-                    if (target.IsNull() || target.IsTaken())
-                        freeSquares.emplace_back(std::pair<int,int>(y, x));
+                    dest.flags |= Tile::POSSIBLETAKE;
                 }
             }
         }
     }
-    // Check that those spaces have another piece inbetween them and the selected piece.
-    for (auto& sqr : freeSquares)
+
+    // Tile flags must be reset whenever the tile of the selected piece changes
+    // This can either be because: the selected piece has moved; a new piece has been
+    // selected; or the turn has changed.
+    void ResetTileFlags()
     {
-        int diffCol {sqr.first - p.bPos.col > 0 ? 1 : -1};
-        int diffRow {sqr.second - p.bPos.row > 0 ? 1 : -1};
-        int iCol {p.bPos.col + diffCol};
-        int iRow {p.bPos.row + diffRow};
-        Piece& inbetweenPiece{board.GetPiece(iRow, iCol)};
-        if(!(inbetweenPiece.IsNull() || inbetweenPiece.IsTaken()) && inbetweenPiece.colour != p.colour)
-            return true;
+        for (auto& tile : board.data)
+        {
+            tile.flags &= ~(Tile::POSSIBLEMOVE | Tile::POSSIBLETAKE);
+        }
     }
-    return false;
-}
+
+    void DeSelectPiece(AssetManager* assets)
+    {
+        ResetTileFlags();
+        GetSelectedPiece().DeSelect(assets);
+        selectedIndex = EMPTYSQUARE;
+    }
+
+    void SelectPiece(Piece& newPiece, AssetManager* assets)
+    {
+        if (selectedIndex != EMPTYSQUARE)
+            DeSelectPiece(assets);
+        newPiece.Select(assets);
+        selectedIndex = newPiece.index;
+        IdentifyPossibleDestinations(newPiece);
+    }
+
+    void MovePieceToTile(Piece& piece, Tile& tile, AssetManager& assets)
+    {
+        // Reset move and take flags
+        ResetTileFlags();
+        // Empty the piece index of the tile the piece is moving from
+        board[piece.bPos.col, piece.bPos.row].pieceIndex = EMPTYSQUARE;
+        // move the piece 
+        piece.MoveTo(tile.bPos);
+        tile.pieceIndex = piece.index;
+        piece.TryPromote(assets);
+        IdentifyPossibleDestinations(piece);
+    }
+
+    void TakeToTile(Piece& piece, Tile& tile, AssetManager& assets)
+    {
+        BPos offset {((tile.bPos - piece.bPos)/2) + piece.bPos};
+        Piece& toTake {GetPiece(offset.row, offset.col)};
+        TakePiece(toTake);
+        MovePieceToTile(piece, tile, assets);
+    }
+
+    bool SelectedPieceCanTake()
+    {
+        for(auto& tile : board.data)
+        {
+            if (tile.flags & Tile::POSSIBLETAKE)
+                return true;
+        }
+        return false;
+    }
+
+
+    Tile& operator[](int y, int x)
+    {
+        return board[y,x];
+    }  
+
+    Piece& GetPiece(int x, int y)
+    {
+        return pieces[board[y,x].pieceIndex];
+    }
+
+    Piece& GetSelectedPiece()
+    {
+        return pieces[selectedIndex];
+    }
+
+    void EndTurn(AssetManager* assets)
+    {
+        DeSelectPiece(assets);
+        ResetTileFlags();
+        turn = turn == Piece::WHITE ? Piece::BLACK : Piece::WHITE;
+        selectedIndex = 0;
+    }
+
+    void TakePiece(Piece& toTake)
+    {
+        toTake.flags |= Piece::TAKEN;
+        board[toTake.bPos.col,toTake.bPos.row].pieceIndex = 0;
+        toTake.bPos = BPos{-1, -1};
+    }
+};
 
 #endif

@@ -136,22 +136,9 @@ SDL_AppResult SDL_AppIterate(void* appstate){
     appData->lastTime = currentTime;
 
     UpdateGame(appData);
-
-    SDL_GPUCommandBuffer* commandBuffer {SDL_AcquireGPUCommandBuffer(appData->device)};
-    if (commandBuffer == nullptr) {
-        SDL_Log("Could not acquire command buffer from gpu: %s", SDL_GetError());
-        return SDL_APP_FAILURE;
-    }
-
-    SDL_GPUTexture* swapChainTexture;
-    if (!SDL_WaitAndAcquireGPUSwapchainTexture(commandBuffer, appData->window, &swapChainTexture, NULL, NULL))
+    if(!DL_Renderer::RenderGame(appData))
     {
-        SDL_Log("Couldn't acquire swapchain texture: %s", SDL_GetError());
         return SDL_APP_FAILURE;
-    }
-    if (swapChainTexture != nullptr)
-    {
-        DL_Renderer::RenderGame(appData, commandBuffer, swapChainTexture);
     }
 
     return SDL_APP_CONTINUE;

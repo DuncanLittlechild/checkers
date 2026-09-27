@@ -6,6 +6,7 @@
 #include "structs/Camera3d.h"
 #include "structs/Ray.h"
 #include "structs/Vector3.h"
+#include <X11/Xmd.h>
 
 inline void UpdateCamera(AppData* appData)
 {
@@ -65,66 +66,52 @@ inline Vector3 GetSquareClickedOn(AppData* appData)
     return GetRayIntersectFlatPlane(ray, Vector3{0.0f,1.0f,0.0f});
 }
 
-inline void TryMovePiece(AppData* appData)
+inline bool ResolveLeftClick(AppData* appData)
 {
     Vector3 sqr{GetSquareClickedOn(appData)};
+    appData->board.squareClickedOnX = sqr.x;
+    appData->board.squareClickedOnZ = sqr.z;
     Board& board{appData->board};
-    if (SquareIsOnBoard(sqr.x, sqr.z))
-    {
-        Piece& t {board.GetPiece(sqr.x, sqr.z)};
-        Piece& sP{board.GetSelectedPiece()};
+    // if the square selected is not on the board, nothing can be done
+    if(!SquareIsOnBoard(sqr.x, sqr.z))
+        return false;
 
-        if((sP.index == EMPTYSQUARE || (!(t.IsNull() || t.flags & Piece::TAKEN))) && t.colour == board.turn)
-            board.selectedIndex = t.index;
-        else if (sP.CanMoveToSpace(sqr.x, sqr.z))
+    bool endTurn{false};
+    Piece& targetPiece {board.GetPiece(sqr.x, sqr.z)};
+    // If another piece is selected, the only possible action to take is to try and select it
+    if (targetPiece.index != EMPTYSQUARE && targetPiece.colour == board.turn)
+    {
+        board.SelectPiece(targetPiece, &appData->assets);
+    }
+    // If an empty square is selected and a piece is currently selected, check that tiles flags and either move to
+    // it, take to it, or do nothing.
+    else if (auto& selectedPiece {board.GetSelectedPiece()}; !selectedPiece.IsNull())
+    {
+        Tile& targetTile {board[sqr.z, sqr.x]};
+        if(targetTile.flags & Tile::POSSIBLEMOVE)
         {
-            board.MoveSelectedPiece(sqr.x, sqr.z);
-            sP.TryPromote(appData->assets); 
-            board.EndTurn();
+            board.MovePieceToTile(selectedPiece, targetTile, appData->assets);
+            endTurn = true;
         }
-        // Try to take piece
-        else 
+        else if (targetTile.flags & Tile::POSSIBLETAKE)
         {
-            // check movement is legal
-            bool takeIsLegal{false};
-            int diffX {(int)sqr.x - sP.bPos.row};
-            int diffY {(int)sqr.z - sP.bPos.col};
-            if(sP.type == Piece::PAWN)
-            {
-                takeIsLegal = std::abs(diffX) == 2
-                            && ((sP.colour == Piece::BLACK && diffY == 2) || (sP.colour == Piece::WHITE && diffY == -2));
-            }
-            else if (sP.type == Piece::KING)
-            {
-                takeIsLegal = std::abs(diffX) == 2 && std::abs(diffY) == 2;
-            }
-            if(takeIsLegal)
-            {
-                // Check that there is a piece in the intervening space and that it is of the opponent's colours.
-                Piece& inbetweenPiece{board.GetPiece(sP.bPos.row + diffX/2, sP.bPos.col + diffY/2)};
-                if(!(inbetweenPiece.IsNull() || inbetweenPiece.flags & Piece::TAKEN) && inbetweenPiece.colour != sP.colour)
-                {
-                    board.MoveSelectedPiece(sqr.x, sqr.z);
-                    board.TakePiece(inbetweenPiece);
-                    sP.TryPromote(appData->assets);
-                    if(!PieceCanTake(sP, board))
-                        board.EndTurn();
-                }
-            }
+            board.TakeToTile(selectedPiece, targetTile, appData->assets);
+            endTurn = !board.SelectedPieceCanTake();
         }
     }
+    return endTurn;
 }
 
 inline void UpdateCurrentBoard(AppData* appData)
 {
     if (appData->input.clickFlags & PlayerInput::LCLICK)
     {
-        TryMovePiece(appData);
-        appData->input.clickFlags = PlayerInput::LCLICK;
+        if (ResolveLeftClick(appData))
+            appData->board.EndTurn(&appData->assets);
     }
-    if (appData->input.clickFlags & PlayerInput::RCLICK)
+    else if (appData->input.clickFlags & PlayerInput::RCLICK)
     {
-        appData->board.selectedIndex = EMPTYSQUARE;  
+        appData->board.DeSelectPiece(&appData->assets);
     }
     appData->input.clickFlags = 0;
 }
@@ -133,7 +120,6 @@ inline void UpdateGame(AppData* appData)
 {
     UpdateCamera(appData);
     UpdateCurrentBoard(appData);
-
 }
 
 #endif

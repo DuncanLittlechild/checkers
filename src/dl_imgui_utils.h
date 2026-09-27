@@ -7,6 +7,9 @@
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_sdlgpu3.h"
 #include "structs/AppData.h"
+#include "structs/Board.h"
+#include "structs/Vector3.h"
+#include <string_view>
 
 static ImDrawData* drawData {nullptr};
 
@@ -19,6 +22,29 @@ static void HelpMarker(const char* desc)
         ImGui::TextUnformatted(desc);
         ImGui::PopTextWrapPos();
         ImGui::EndTooltip();
+    }
+}
+
+inline void DL_Imgui_EditMaterial(Material& material, std::string_view name)
+{
+    static int instance {0};
+    float albedo[3];
+    SDL_memcpy(albedo, &material.albedo, sizeof(Vector3));
+    float specularColour[3];
+    SDL_memcpy(specularColour, &material.specularColour, sizeof(Vector3));
+    std::string albedoStr {"albedo##"};
+    albedoStr += name;
+    std::string sCStr {"specular colour##"};
+    sCStr += name;
+    std::string shininessStr{"shininess##"};
+    shininessStr += name;
+    if(ImGui::CollapsingHeader(name.data()))
+    {
+        if(ImGui::ColorEdit3(albedoStr.c_str(), albedo))
+            SDL_memcpy(&material.albedo, albedo, sizeof(Vector3));
+        if(ImGui::ColorEdit3(sCStr.c_str(), specularColour))
+            SDL_memcpy(&material.specularColour, specularColour, sizeof(Vector3));
+        ImGui::SliderFloat(shininessStr.c_str(), &material.shininess, 0.0f, 128.f);
     }
 }
 
@@ -55,27 +81,37 @@ inline void PrepareImgui(AppData* appData, SDL_GPUCommandBuffer* commandBuffer) 
     ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
     ImGuiIO& io {ImGui::GetIO()};
-    ImGui::Begin("Camera");
-    ImGui::Text("Camera Position:  x:%f,  y:%f,  z:%f", appData->camera.pos.x,appData->camera.pos.y,appData->camera.pos.z);
-    ImGui::Text("Camera target:  x:%f,  y:%f,  z:%f", appData->camera.target.x,appData->camera.target.y,appData->camera.target.z);
-    ImGui::Text("DeltaTime: %f", appData->deltaTime);
-    ImGui::Text("Selected square: x: %d, y: %d", appData->board.GetSelectedPiece().bPos.row, appData->board.GetSelectedPiece().bPos.col);
-    if(ImGui::ColorEdit3("WhiteCol", appData->assets.pieceMat.albedo))
+    ImGui::Begin("Data");
+    if(ImGui::BeginTabBar("Edits"))
     {
-        SDL_memcpy(appData->assets.tileMat.albedo, appData->assets.pieceMat.albedo, sizeof(float) * 3);
+        if(ImGui::BeginTabItem("Camera"))
+        {
+            ImGui::Text("Camera Position:  x:%f,  y:%f,  z:%f", appData->camera.pos.x,appData->camera.pos.y,appData->camera.pos.z);
+            ImGui::Text("Camera target:  x:%f,  y:%f,  z:%f", appData->camera.target.x,appData->camera.target.y,appData->camera.target.z);
+            ImGui::Text("DeltaTime: %f", appData->deltaTime);
+            ImGui::Text("SquareClickedOn: x: %f, z: %f", appData->board.squareClickedOnX, appData->board.squareClickedOnZ);
+            ImGui::Text("Selected square: x: %d, y: %d", appData->board.GetSelectedPiece().bPos.row, appData->board.GetSelectedPiece().bPos.col);
+            ImGui::EndTabItem();
+        }
+        if (ImGui::BeginTabItem("Light"))
+        {
+            if(ImGui::SliderFloat3("LightPos", &appData->lightSource.pos.x, -20.f, 20.f))
+            {
+                appData->lightSource.UpdateViewMat();
+                appData->lightSource.UpdateVpMat();
+            }
+            DL_Imgui_EditMaterial(appData->assets.pieceMatW, "White Piece");
+            DL_Imgui_EditMaterial(appData->assets.pieceMatB, "Black Piece");
+            DL_Imgui_EditMaterial(appData->assets.pieceMatSelected, "Selected Piece");
+            DL_Imgui_EditMaterial(appData->assets.tileMatB, "White Tile");
+            DL_Imgui_EditMaterial(appData->assets.tileMatB, "Black Tile");
+            if(ImGui::Button("Save Materials"))
+                appData->assets.SaveMatData();
+            ImGui::EndTabItem();
+        }
+        ImGui::EndTabBar();
     }
-    ImGui::ColorEdit3("BlackCol", &appData->board.blackCol.x);
 
-    if(ImGui::SliderFloat3("LightPos", &appData->lightSource.pos.x, -20.f, 20.f))
-    {
-        appData->lightSource.UpdateViewMat();
-        appData->lightSource.UpdateVpMat();
-    }
-    ImGui::SliderFloat("Piece Shinyness", &appData->pieceShinyness, .0f, 128.f);
-    ImGui::SliderFloat("Board Shinyness", &appData->boardShinyness, .0f, 128.f);
-
-    ImGui::ColorEdit3("Board Specular Colour",&appData->boardSpecularColour.x);
-    ImGui::ColorEdit3("Piece Specular Colour", &appData->pieceSpecularColour.x);
     ImGui::End();
 
     ImGui::Render();

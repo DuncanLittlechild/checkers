@@ -221,6 +221,16 @@ inline Matrix4x4 Matrix4x4_CreateTranslation(float x, float y, float z)
 	};
 }
 
+inline Matrix4x4 Matrix4x4_CreateTranslation(const Vector3& vec)
+{
+	return (Matrix4x4) {
+		1, 0, 0, 0,
+		0, 1, 0, 0,
+		0, 0, 1, 0,
+		vec.x, vec.y, vec.z, 1
+	};
+}
+
 inline Matrix4x4 Matrix4x4_CreateScale(float scale)
 {
 	return (Matrix4x4){
