@@ -12,7 +12,7 @@ struct Input
     float4 Position : SV_Position;
 };
 
-float4 main (Input input) : SV_Target0
+void main (Input input) : SV_Target0
 {
-    return float4(trueColour, 1.0f);
+    //return float4(trueColour, 1.0f);
 }

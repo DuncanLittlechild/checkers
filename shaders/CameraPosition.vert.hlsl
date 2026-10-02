@@ -8,6 +8,7 @@ cbuffer VpTrans : register(b1, space1)
     row_major float4x4 LvpTrans;
 };
 
+
 struct Input
 {
     float3 position : TEXCOORD0;

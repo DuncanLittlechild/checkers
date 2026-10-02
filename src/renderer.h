@@ -43,7 +43,7 @@ namespace DL_Renderer{
         // Iterate over themS
         for (auto& piece : pieces)
         {
-            if (piece.flags & Piece::TAKEN)
+            if (piece.IsNull() || piece.flags & Piece::TAKEN)
                 continue;
             else if (piece.type == Piece::KING)
             {
@@ -71,7 +71,7 @@ namespace DL_Renderer{
             Matrix4x4 moveMat {Matrix4x4_Multiply(Matrix4x4_CreateScale(selectedPiece->renderData.scale), Matrix4x4_CreateTranslation(selectedPiece->renderData.offset))};
             SDL_PushGPUVertexUniformData(commandBuffer, 0, &moveMat, sizeof(Matrix4x4));        
             SDL_DrawGPUIndexedPrimitives(renderPass, indexCount, 1, 0, 0, 0);
-        }
+        }/*
         if(!kingIndices.empty())
         {
             vertexBuffers[0].buffer = assets->king.vertices;
@@ -105,7 +105,7 @@ namespace DL_Renderer{
             Matrix4x4 moveMat {Matrix4x4_Multiply(Matrix4x4_CreateScale(selectedPiece->renderData.scale), Matrix4x4_CreateTranslation(selectedPiece->renderData.offset))};
             SDL_PushGPUVertexUniformData(commandBuffer, 0, &moveMat, sizeof(Matrix4x4));        
             SDL_DrawGPUIndexedPrimitives(renderPass, indexCount, 1, 0, 0, 0);
-        }
+        }*/
     }
 
     inline void RenderTiles(std::span<Tile> tiles, AssetManager* assets, SDL_GPURenderPass* renderPass, SDL_GPUCommandBuffer* commandBuffer)
@@ -148,21 +148,69 @@ namespace DL_Renderer{
     // Perform the renderpass needed to create the shadow depth texture
     inline void ShadowRenderPass(SDL_GPUCommandBuffer* commandBuffer, AppData* appData, SDL_GPUColorTargetInfo* targetInfo)
     {
+        AssetManager* assets {&appData->assets};
         SDL_GPUDepthStencilTargetInfo depthInfo{
             .texture = appData->assets.shadows,
             .clear_depth = 1.0f,
             .load_op = SDL_GPU_LOADOP_CLEAR,
-            .store_op = SDL_GPU_STOREOP_DONT_CARE
+            .store_op = SDL_GPU_STOREOP_STORE
         };
 
-        SDL_GPURenderPass* renderPass {SDL_BeginGPURenderPass(commandBuffer, targetInfo, 1, &depthInfo)};
+        SDL_GPURenderPass* renderPass {SDL_BeginGPURenderPass(commandBuffer, nullptr, 0, &depthInfo)};
 
         SDL_BindGPUGraphicsPipeline(renderPass, appData->assets.shadowPipeline);
 
         SDL_PushGPUVertexUniformData(commandBuffer, 1, &appData->lightSource.vpMat, sizeof(Matrix4x4));
+        // Uses a pointer to the piece to ensure that the correct material is always used,
+        // regardless of the order of black and white
+        Uint32 indexCount {assets->piece.indexCount};
 
-        RenderTiles(appData->board.board.data, &appData->assets, renderPass, commandBuffer);
-        RenderPieces(appData->board.pieces, &appData->assets, renderPass, commandBuffer);
+        std::array vertexBuffers{
+            SDL_GPUBufferBinding{
+                .buffer = assets->piece.vertices,
+                .offset = 0
+            }
+        };
+
+        SDL_GPUBufferBinding indexBuffer{
+            .buffer = assets->piece.indices,
+            .offset = 0
+        };
+
+        SDL_BindGPUVertexBuffers(renderPass, 0, vertexBuffers.data(), vertexBuffers.size());
+        SDL_BindGPUIndexBuffer(renderPass, &indexBuffer, SDL_GPU_INDEXELEMENTSIZE_16BIT);
+        
+        std::vector<int> kingIndices{};
+        kingIndices.reserve(8);
+        // Iterate over themS
+        for (auto& piece : appData->board.pieces)
+        {
+            if (piece.IsNull()||piece.flags & Piece::TAKEN)
+                continue;
+            else if (piece.type == Piece::KING)
+            {
+                kingIndices.push_back(piece.index);
+                continue;
+            }
+            Matrix4x4 moveMat {Matrix4x4_Multiply(Matrix4x4_CreateScale(piece.renderData.scale), Matrix4x4_CreateTranslation(piece.renderData.offset))};
+            SDL_PushGPUVertexUniformData(commandBuffer, 0, &moveMat, sizeof(Matrix4x4));        
+            SDL_DrawGPUIndexedPrimitives(renderPass, indexCount, 1, 0, 0, 0);
+        }/*
+        if(!kingIndices.empty())
+        {
+            vertexBuffers[0].buffer = assets->king.vertices;
+            indexBuffer.buffer = assets->king.indices;
+
+            SDL_BindGPUVertexBuffers(renderPass, 0, vertexBuffers.data(), vertexBuffers.size());
+            SDL_BindGPUIndexBuffer(renderPass, &indexBuffer, SDL_GPU_INDEXELEMENTSIZE_16BIT);
+
+            for (auto i : kingIndices)
+            {
+                Matrix4x4 moveMat {Matrix4x4_Multiply(Matrix4x4_CreateScale(appData->board.pieces[i].renderData.scale), Matrix4x4_CreateTranslation(appData->board.pieces[i].renderData.offset))};
+                SDL_PushGPUVertexUniformData(commandBuffer, 0, &moveMat, sizeof(Matrix4x4));        
+                SDL_DrawGPUIndexedPrimitives(renderPass, indexCount, 1, 0, 0, 0);
+            }
+        }*/
 
         SDL_EndGPURenderPass(renderPass);
     }
@@ -223,6 +271,7 @@ namespace DL_Renderer{
             .lightVPMat = appData->lightSource.vpMat
         };
         SDL_PushGPUVertexUniformData(commandBuffer, 1, &vertexPerLoopUB, sizeof(DL_LightingVertexPerLoop));
+
 
         DL_LightingFragPerLoop fragPerLoopUB{
             .cameraPos = appData->camera.pos,

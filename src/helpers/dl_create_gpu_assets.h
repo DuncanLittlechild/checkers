@@ -3,6 +3,7 @@
 #include "SDL3/SDL.h"
 #include <span>
 #include <vector>
+#include "SDL3/SDL_gpu.h"
 #include "helpers/shaderUtils.h"
 #include "structs/Vertex.h"
 
@@ -133,6 +134,100 @@ inline bool CreateGPUVertexBuffer(SDL_GPUDevice* device, const std::vector<Verte
 inline bool CreateGPUIndexBuffer(SDL_GPUDevice* device, const std::vector<uint16_t>& vertices, SDL_GPUBuffer** buffer, Uint32& indexCount)
 {
     return CreateGPUBuffer(device, std::span<const uint16_t>(vertices), SDL_GPU_BUFFERUSAGE_INDEX, buffer, &indexCount);
+}
+
+inline bool CreateShadowPipeline(SDL_GPUGraphicsPipeline** pipeline, SDL_GPUDevice* device, SDL_Window* window)
+{
+    DL_ShaderInfo vShaderInfo {
+        .shaderFilename = "BasicPos.vert",
+        .numUniformBuffers = 2
+    };
+    DL_ShaderInfo fShaderInfo {
+        .shaderFilename = "BasicColour.frag",
+    };
+    SDL_GPUShader* vertexColourShader {LoadShader(device, &vShaderInfo)};
+    if(vertexColourShader == nullptr)
+    {
+        SDL_Log("Couldn'tcreate vertex shader\n");
+        return false;
+    }
+
+    SDL_GPUShader* basicFragShader {LoadShader(device, &fShaderInfo)};
+    if(basicFragShader == nullptr)
+    {
+        SDL_Log("Couldn'tcreate fragment shader\n");
+        return false;
+    }
+
+    std::array vertexBufferDescriptions {
+        SDL_GPUVertexBufferDescription {
+            .slot = 0,
+            .pitch = sizeof(Vertex),
+            .input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX,
+            .instance_step_rate = 0
+        }
+    };
+
+    std::array vertexAttributes {
+        SDL_GPUVertexAttribute{
+            .location = 0,
+            .buffer_slot = 0,
+            .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3,
+            .offset = 0
+        },
+        SDL_GPUVertexAttribute{
+            .location = 1,
+            .buffer_slot = 0,
+            .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3,
+            .offset = sizeof(float) * 3
+        },
+        SDL_GPUVertexAttribute{
+            .location = 2,
+            .buffer_slot = 0,
+            .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3,
+            .offset = sizeof(float) * 6
+        }
+    };
+
+    SDL_GPUGraphicsPipelineCreateInfo pipelineCreateInfo {
+        .vertex_shader = vertexColourShader,
+        .fragment_shader = basicFragShader,
+        .vertex_input_state = {
+            .vertex_buffer_descriptions = vertexBufferDescriptions.data(),
+            .num_vertex_buffers = vertexBufferDescriptions.size(),
+            .vertex_attributes = vertexAttributes.data(),
+            .num_vertex_attributes = vertexAttributes.size()
+        },
+        .primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
+        .rasterizer_state = {
+            .fill_mode = SDL_GPU_FILLMODE_FILL,
+            //.cull_mode = SDL_GPU_CULLMODE_FRONT,
+            .front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE,
+            .depth_bias_constant_factor = 1.25f,       // slope-scaled depth bias -- see below
+            .depth_bias_slope_factor = 1.75f,
+            .enable_depth_bias = true,
+        },
+        .depth_stencil_state = {
+            .compare_op = SDL_GPU_COMPAREOP_LESS,
+            .enable_depth_test = true,
+            .enable_depth_write = true,
+            .enable_stencil_test = false,
+            
+        },
+        .target_info = {
+            .color_target_descriptions = nullptr,
+            .num_color_targets = 0,
+            .depth_stencil_format = SDL_GPU_TEXTUREFORMAT_D32_FLOAT,
+            .has_depth_stencil_target = true,
+        }
+    };
+
+    *pipeline = SDL_CreateGPUGraphicsPipeline(device, &pipelineCreateInfo);
+
+    SDL_ReleaseGPUShader(device, vertexColourShader);
+    SDL_ReleaseGPUShader(device, basicFragShader);
+
+    return true;
 }
 
 inline bool CreatePipeline(SDL_GPUGraphicsPipeline** pipeline, SDL_GPUDevice* device, SDL_Window* window, DL_ShaderInfo* vertexShaderInfo, DL_ShaderInfo* fragmentShaderInfo)

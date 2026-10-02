@@ -139,7 +139,7 @@ struct AssetManager{
     Material pieceMatB{};
     Material pieceMatSelected{};
 
-    Uint32 shadowRes{1024};
+    Uint32 shadowRes{2048};
 
     bool Load(SDL_GPUDevice* device, SDL_Window* window, int w, int h)
     {
@@ -193,20 +193,7 @@ struct AssetManager{
 			&vertexShaderInfo, &fragmentShaderInfo
 		);
 
-
-		DL_ShaderInfo shadowVertexShaderInfo{
-			.shaderFilename = "BasicPos.vert",
-			.numUniformBuffers = 2
-		};
-		DL_ShaderInfo shadowFragmentShaderInfo{
-			.shaderFilename = "BasicColour.frag",
-			.numUniformBuffers = 1
-		};
-		CreatePipeline(
-			&shadowPipeline,
-			device, window,
-			&shadowVertexShaderInfo, &shadowFragmentShaderInfo
-		);
+        CreateShadowPipeline(&shadowPipeline, device, window);
 
         return true;
 	}

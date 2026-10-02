@@ -31,20 +31,58 @@ struct main0_in
 fragment main0_out main0(main0_in in [[stage_in]], constant type_OncePerLoop& OncePerLoop [[buffer(0)]], constant type_OncePerObject& OncePerObject [[buffer(1)]], texture2d<float> Texture [[texture(0)]], sampler Sampler [[sampler(0)]])
 {
     main0_out out = {};
-    float3 _49 = fast::normalize(in.in_var_TEXCOORD0);
-    float3 _54 = fast::normalize(OncePerLoop.lightPos - in.in_var_TEXCOORD2.xyz);
-    float3 _76 = ((OncePerObject.trueColour * precise::max(dot(_54, _49), 0.0)) + (OncePerObject.trueColour * 0.100000001490116119384765625)) + (float3(OncePerObject.specularColour) * powr(precise::max(dot(_49, fast::normalize(_54 + fast::normalize(OncePerLoop.cameraPos - in.in_var_TEXCOORD2.xyz))), 0.0), OncePerObject.shinyness));
-    float3 _81 = in.in_var_TEXCOORD1.xyz / float3(in.in_var_TEXCOORD1.w);
-    float3 _97;
-    if ((Texture.sample(Sampler, ((_81.xy * 0.5) + float2(0.5)).xy).x + 0.001000000047497451305389404296875) < _81.z)
+    float3 _50 = fast::normalize(in.in_var_TEXCOORD0);
+    float3 _55 = fast::normalize(OncePerLoop.lightPos - in.in_var_TEXCOORD2.xyz);
+    float3 _77 = ((OncePerObject.trueColour * precise::max(dot(_55, _50), 0.0)) + (OncePerObject.trueColour * 0.100000001490116119384765625)) + (float3(OncePerObject.specularColour) * powr(precise::max(dot(_50, fast::normalize(_55 + fast::normalize(OncePerLoop.cameraPos - in.in_var_TEXCOORD2.xyz))), 0.0), OncePerObject.shinyness));
+    float3 _82 = in.in_var_TEXCOORD1.xyz / float3(in.in_var_TEXCOORD1.w);
+    float2 _85 = (_82.xy * 0.5) + float2(0.5);
+    float _86 = _85.x;
+    bool _91;
+    if ((isunordered(_86, 1.0) || _86 <= 1.0))
     {
-        _97 = _76 * 0.100000001490116119384765625;
+        _91 = _86 < 0.0;
     }
     else
     {
-        _97 = _76;
+        _91 = true;
     }
-    out.out_var_SV_Target0 = float4(_97, 1.0);
+    bool _97;
+    if (!_91)
+    {
+        _97 = _85.y > 1.0;
+    }
+    else
+    {
+        _97 = true;
+    }
+    bool _103;
+    if (!_97)
+    {
+        _103 = _85.y < 0.0;
+    }
+    else
+    {
+        _103 = true;
+    }
+    float3 _122;
+    if (!_103)
+    {
+        float3 _120;
+        if ((Texture.sample(Sampler, _85.xy).x + 0.00999999977648258209228515625) < _82.z)
+        {
+            _120 = _77 * 0.100000001490116119384765625;
+        }
+        else
+        {
+            _120 = _77;
+        }
+        _122 = _120;
+    }
+    else
+    {
+        _122 = _77 * 0.100000001490116119384765625;
+    }
+    out.out_var_SV_Target0 = float4(_122, 1.0);
     return out;
 }
 

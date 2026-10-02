@@ -100,6 +100,11 @@ inline void PrepareImgui(AppData* appData, SDL_GPUCommandBuffer* commandBuffer) 
                 appData->lightSource.UpdateViewMat();
                 appData->lightSource.UpdateVpMat();
             }
+            if(ImGui::SliderFloat3("LightTarget", &appData->lightSource.target.x, -20.f, 20.f))
+            {
+                appData->lightSource.UpdateViewMat();
+                appData->lightSource.UpdateVpMat();
+            }
             if(ImGui::SliderFloat("LightRadius", &appData->lightRadius, 0.01f, SDL_PI_F))
             {
                 appData->lightSource.fov = appData->lightRadius;

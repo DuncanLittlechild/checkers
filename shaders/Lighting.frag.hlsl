@@ -52,15 +52,21 @@ float4 main (Input input) : SV_Target0
 
     // Texture coordinates are [0,1] while x and y in this case are [-1,1] due to being coordinates
     finalSpacePos.xy = finalSpacePos.xy * 0.5 + 0.5;
+    if (!(finalSpacePos.x > 1.0 || finalSpacePos.x < 0.0 || finalSpacePos.y > 1.0 || finalSpacePos.y < 0.0))
+    {
+        float currentDepth = finalSpacePos.z;
+        // This uses the finalSpacePos to index into the texture, and then extract the single channel depth value (.r)
+        float textureDepth = Texture.Sample(Sampler, finalSpacePos.xy).r;
 
-    float currentDepth = finalSpacePos.z;
-    // This uses the finalSpacePos to index into the texture, and then extract the single channel depth value (.r)
-    float textureDepth = Texture.Sample(Sampler, finalSpacePos.xy).r;
+        float bias = 0.01;
 
-    float bias = 0.001;
-
-    // if it is greater than the sampled depth, the point is in shadow
-    if (textureDepth + bias < currentDepth)
+        // if it is greater than the sampled depth, the point is in shadow
+        if (textureDepth + bias < currentDepth)
+        {
+            finalColour *= 0.1;
+        }
+    }
+    else
     {
         finalColour *= 0.1;
     }
